@@ -1,0 +1,29 @@
+  1. Create the akwaaba-indexer service account, with no login shell
+     $ useradd --system --home /srv/solanaghana/projects/akwaaba-indexer --shell /usr/sbin/nologin akwaaba-indexer
+  2. Ensure the platform directory /srv/solanaghana/projects exists
+     $ install -d -o root -g root -m 755 /srv/solanaghana/projects
+  3. Ensure the platform directory /srv/solanaghana/deployments exists
+     $ install -d -o root -g root -m 755 /srv/solanaghana/deployments
+  4. Ensure the platform directory /srv/solanaghana/configs exists
+     $ install -d -o root -g root -m 755 /srv/solanaghana/configs
+  5. Ensure the platform directory /srv/solanaghana/logs exists
+     $ install -d -o root -g root -m 755 /srv/solanaghana/logs
+  6. Ensure the platform directory /srv/solanaghana/systemd exists
+     $ install -d -o root -g root -m 755 /srv/solanaghana/systemd
+  7. Ensure /srv/solanaghana/projects/akwaaba-indexer exists, owned by akwaaba-indexer
+     $ install -d -o akwaaba-indexer -g akwaaba-indexer -m 750 /srv/solanaghana/projects/akwaaba-indexer
+  8. Ensure /srv/solanaghana/deployments/akwaaba-indexer exists, owned by akwaaba-indexer
+     $ install -d -o akwaaba-indexer -g akwaaba-indexer -m 750 /srv/solanaghana/deployments/akwaaba-indexer
+  9. Ensure /srv/solanaghana/logs/akwaaba-indexer exists, owned by akwaaba-indexer
+     $ install -d -o akwaaba-indexer -g akwaaba-indexer -m 750 /srv/solanaghana/logs/akwaaba-indexer
+ 10. Fetch the backend repository at production
+     $ git clone --depth 1 --branch production https://github.com/user/akwaaba-indexer /srv/solanaghana/projects/akwaaba-indexer/backend
+ 11. Build the backend
+     $ cd /srv/solanaghana/projects/akwaaba-indexer/backend && cargo build --release
+ 12. Install the backend systemd unit
+     $ install -o root -g root -m 644 /srv/solanaghana/systemd/akwaaba-indexer-backend.service /etc/systemd/system/akwaaba-indexer-backend.service
+ 13. Reload systemd so the new units are visible
+     $ systemctl daemon-reload
+ 14. Enable and start the backend
+     $ systemctl enable --now akwaaba-indexer-backend.service
+ 15. No domain is configured, so Caddy is left untouched

@@ -1,0 +1,16 @@
+# A project with a browser frontend and an API, each on its own subdomain.
+name: my-solana-project
+
+frontend:
+  repo: github.com/user/frontend
+  build: npm run build
+  port: 3000
+
+backend:
+  repo: github.com/user/backend
+  build: npm run build
+  port: 8080
+
+domain:
+  frontend: myproject.solanaghana.dev
+  api: api.myproject.solanaghana.dev

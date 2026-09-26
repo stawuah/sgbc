@@ -1,0 +1,42 @@
+  1. Create the my-solana-project service account, with no login shell
+     $ useradd --system --home /srv/solanaghana/projects/my-solana-project --shell /usr/sbin/nologin my-solana-project
+  2. Ensure the platform directory /srv/solanaghana/projects exists
+     $ install -d -o root -g root -m 755 /srv/solanaghana/projects
+  3. Ensure the platform directory /srv/solanaghana/deployments exists
+     $ install -d -o root -g root -m 755 /srv/solanaghana/deployments
+  4. Ensure the platform directory /srv/solanaghana/configs exists
+     $ install -d -o root -g root -m 755 /srv/solanaghana/configs
+  5. Ensure the platform directory /srv/solanaghana/logs exists
+     $ install -d -o root -g root -m 755 /srv/solanaghana/logs
+  6. Ensure the platform directory /srv/solanaghana/systemd exists
+     $ install -d -o root -g root -m 755 /srv/solanaghana/systemd
+  7. Ensure /srv/solanaghana/projects/my-solana-project exists, owned by my-solana-project
+     $ install -d -o my-solana-project -g my-solana-project -m 750 /srv/solanaghana/projects/my-solana-project
+  8. Ensure /srv/solanaghana/deployments/my-solana-project exists, owned by my-solana-project
+     $ install -d -o my-solana-project -g my-solana-project -m 750 /srv/solanaghana/deployments/my-solana-project
+  9. Ensure /srv/solanaghana/logs/my-solana-project exists, owned by my-solana-project
+     $ install -d -o my-solana-project -g my-solana-project -m 750 /srv/solanaghana/logs/my-solana-project
+ 10. Fetch the backend repository at main
+     $ git clone --depth 1 --branch main https://github.com/user/backend /srv/solanaghana/projects/my-solana-project/backend
+ 11. Build the backend
+     $ cd /srv/solanaghana/projects/my-solana-project/backend && npm run build
+ 12. Install the backend systemd unit
+     $ install -o root -g root -m 644 /srv/solanaghana/systemd/my-solana-project-backend.service /etc/systemd/system/my-solana-project-backend.service
+ 13. Fetch the frontend repository at main
+     $ git clone --depth 1 --branch main https://github.com/user/frontend /srv/solanaghana/projects/my-solana-project/frontend
+ 14. Build the frontend
+     $ cd /srv/solanaghana/projects/my-solana-project/frontend && npm run build
+ 15. Install the frontend systemd unit
+     $ install -o root -g root -m 644 /srv/solanaghana/systemd/my-solana-project-frontend.service /etc/systemd/system/my-solana-project-frontend.service
+ 16. Reload systemd so the new units are visible
+     $ systemctl daemon-reload
+ 17. Enable and start the backend
+     $ systemctl enable --now my-solana-project-backend.service
+ 18. Enable and start the frontend
+     $ systemctl enable --now my-solana-project-frontend.service
+ 19. Install the Caddy site configuration
+     $ install -o root -g root -m 644 /srv/solanaghana/configs/my-solana-project.caddy /etc/caddy/sites/my-solana-project.caddy
+ 20. Reload Caddy, which provisions HTTPS for each new name
+     $ systemctl reload caddy
+ 21. Point a DNS record for api.myproject.solanaghana.dev at this host, then it serves the backend
+ 22. Point a DNS record for myproject.solanaghana.dev at this host, then it serves the frontend

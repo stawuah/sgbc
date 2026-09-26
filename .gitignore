@@ -1,0 +1,4 @@
+/target
+
+# Local output from `sgbc write --root ./scratch`
+/scratch

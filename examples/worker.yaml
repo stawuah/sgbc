@@ -1,0 +1,9 @@
+# A worker with no browser surface: no port, no domain, nothing routed.
+# Bots, indexers and MCP servers take this shape.
+name: akwaaba-indexer
+
+backend:
+  repo: github.com/user/akwaaba-indexer
+  branch: production
+  build: cargo build --release
+  start: ./target/release/akwaaba-indexer
