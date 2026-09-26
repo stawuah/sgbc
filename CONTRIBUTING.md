@@ -7,8 +7,8 @@ Solana Ghana Builder Cloud runs code on a host shared by the whole community, so
 You need a Rust toolchain. Nothing else.
 
 ```bash
-git clone <this repo>
-cd solana-ghana-builder-cloud
+git clone https://github.com/stawuah/sgbc.git
+cd sgbc
 cargo test
 cargo build
 ```

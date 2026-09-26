@@ -151,12 +151,19 @@ GitHub webhooks/API integration and a builder dashboard can be added later.
 `sgbc` reads a project's configuration and generates everything a deploy installs. Phase 1 generates and reviews; it does not execute.
 
 ```bash
-cargo build --release
+cargo install --path .    # puts sgbc on your PATH
 
 sgbc validate examples/project.yaml   # check the configuration
 sgbc render   examples/project.yaml   # print the systemd units and Caddy config
 sgbc plan     examples/project.yaml   # print the ordered deploy steps
 sgbc write    examples/project.yaml --root ./scratch   # write the files somewhere safe
+```
+
+Or without installing, running the binary from the build directory:
+
+```bash
+cargo build --release
+./target/release/sgbc validate examples/project.yaml
 ```
 
 `--root` exists so the whole tree can be produced and inspected without a host. It defaults to `/srv/solanaghana`.
@@ -254,6 +261,12 @@ Instead of every builder needing to figure out:
 the community can provide the infrastructure and let builders focus on:
 
 **Build → Ship → Iterate.**
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE).
+
+Copyright 2026 Solana Ghana Community.
 
 ---
 

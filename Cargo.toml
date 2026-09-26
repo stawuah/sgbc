@@ -2,9 +2,15 @@
 name = "sgbc"
 version = "0.1.0"
 edition = "2024"
+description = "Solana Ghana Builder Cloud: generates systemd units and Caddy routes to deploy builder projects without Docker"
+repository = "https://github.com/stawuah/sgbc"
+license = "Apache-2.0"
+readme = "README.md"
+keywords = ["solana", "deployment", "systemd", "caddy"]
+categories = ["command-line-utilities"]
 
 [dependencies]
 anyhow = "1.0.104"
 clap = { version = "4.6.7", features = ["derive"] }
 serde = { version = "1.0.229", features = ["derive"] }
-serde_yaml = "0.9.34"
+serde_norway = "0.9.42"

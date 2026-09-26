@@ -48,7 +48,7 @@ The honest limitation: a project needing two backends cannot express that yet. G
 
 ## Validation is the trust boundary
 
-Every value in the config ends up in a systemd unit, a Caddy site block or a filesystem path. `config::validate` is therefore stricter than YAML requires, and each rule exists for a specific reason:
+Every value in the config ends up in a systemd unit, a Caddy site block or a filesystem path. The validation in `Project::validate` and `Service::validate` is therefore stricter than YAML requires, and each rule exists for a specific reason:
 
 | Rule | What it prevents |
 | --- | --- |

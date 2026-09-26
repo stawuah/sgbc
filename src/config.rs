@@ -70,7 +70,7 @@ impl fmt::Display for Role {
 
 impl Project {
     pub fn parse(yaml: &str) -> Result<Self> {
-        let project: Project = serde_yaml::from_str(yaml)?;
+        let project: Project = serde_norway::from_str(yaml)?;
         project.validate()?;
         Ok(project)
     }
