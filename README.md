@@ -155,7 +155,8 @@ cargo install --path .    # puts sgbc on your PATH
 
 sgbc validate examples/project.yaml   # check the configuration
 sgbc render   examples/project.yaml   # print the systemd units and Caddy config
-sgbc plan     examples/project.yaml   # print the ordered deploy steps
+sgbc plan     examples/project.yaml   # print an offline first-deploy template
+sgbc deploy   examples/project.yaml --dry-run --root ./scratch  # inspect local checkouts
 sgbc write    examples/project.yaml --root ./scratch   # write the files somewhere safe
 ```
 
@@ -169,6 +170,36 @@ cargo build --release
 `--root` exists so the whole tree can be produced and inspected without a host. It defaults to `/srv/solanaghana`.
 
 Deliberately absent: `sgbc` does not create Linux accounts, clone repositories, run builds, install units into `/etc`, or start services. Those are the steps `sgbc plan` prints, and they belong to Phase 2 — when there is a host to run them against and test them on. Shipping privileged, untested execution ahead of that would be the one mistake this platform cannot afford.
+
+### Deployment dry run
+
+`sgbc deploy project.yaml --dry-run --root ./scratch` inspects service checkout
+paths under the selected **local** root and prints a deployment plan. It does
+not contact GitHub or a VPS, fetch code, run builds, write deployment files, or
+invoke systemd/Caddy. Omitting `--dry-run` is an error: execution is unavailable.
+
+- Missing or empty service directories produce a first-deployment clone plan.
+- Existing clean checkouts on the configured branch and origin produce a fetch
+  and fast-forward update plan, followed by a service restart.
+- Dirty checkouts, untracked files, different origins/branches, detached HEADs,
+  non-repository directories, and symlinked checkout paths are rejected.
+- Every command identifies its intended root or project-user identity. These
+  labels are explanatory, not a shell script to paste into a root terminal.
+- Relative roots resolve to absolute paths. Roots accept letters, digits,
+  slashes, hyphens, underscores and dots; `/` and parent traversal are rejected.
+  This path rule also applies to `render`, `plan`, and `write` because their
+  paths appear in systemd and Caddy files.
+
+The plan requires operator provisioning for accounts, runtimes, Caddy imports,
+DNS and log permissions. Include dependency installation in `build`, for example
+`npm ci && npm run build`. Updates are in place, have no rollback or health
+checks, and must stop on failure. Remote branch existence and divergence can
+only be checked when a future executor fetches; this dry run does not do so.
+`plan` remains an offline template that assumes new checkouts.
+
+Local tests exercise the planned Git/build actions against a temporary repository
+as the current test user, including first deployment, updates and failure cases.
+They do not establish host permissions, service startup or HTTPS behavior.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the configuration reference and the generated output, and [CONTRIBUTING.md](CONTRIBUTING.md) to work on it.
 

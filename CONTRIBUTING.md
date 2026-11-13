@@ -19,6 +19,7 @@ Then try it against the examples:
 ./target/debug/sgbc validate examples/project.yaml
 ./target/debug/sgbc render   examples/project.yaml
 ./target/debug/sgbc plan     examples/project.yaml
+./target/debug/sgbc deploy   examples/project.yaml --dry-run --root ./scratch
 ./target/debug/sgbc write    examples/project.yaml --root ./scratch
 ```
 
@@ -92,3 +93,16 @@ and truncate every other builder's logs.
 ```
 
 against `fix: change log path`. The first one is still useful in a year.
+
+## Deployment planner tests
+
+`cargo test --test deploy` uses temporary local Git repositories to exercise the
+first-clone and fast-forward-update Git/build actions as the current test user.
+No root actions, external network access, systemd or Caddy are used. The CLI tests
+also assert that dry runs leave checkouts unchanged and reject unsafe local state.
+A failing build or divergent update stops the test harness before later actions;
+production deployment execution is still unavailable.
+
+When editing the plan, inspect `tests/golden/*.plan` after regenerating snapshots.
+Keep execution identities explicit and Git arguments separate from shell command
+strings. Only a builder's explicit build command should require a shell.

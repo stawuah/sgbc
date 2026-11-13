@@ -11,7 +11,8 @@ How `sgbc` turns one YAML file into the systemd units, Caddy routes and director
 | `config` | Parse `project.yaml` and enforce every constraint the host relies on |
 | `layout` | Derive every path from the project name |
 | `render` | Generate the systemd unit and the Caddy site block |
-| `plan` | Produce the ordered steps a deploy performs |
+| `plan` | Produce structured commands with arguments, working directories and execution identities |
+| `deploy` | Read-only local checkout inspection for `deploy --dry-run` |
 
 `render` and `plan` are pure functions of the config and the layout. Nothing in them touches the filesystem, which is why the exact text destined for a host can be tested without one — see `tests/golden.rs`.
 
@@ -109,3 +110,37 @@ Generated units are written to `<root>/systemd/` rather than straight into `/etc
 `sgbc` generates files and prints the plan. It does not create accounts, clone repositories, run builds, install into `/etc`, or start services.
 
 That boundary is deliberate. Those steps run as root on a host shared by the community, and there is no host yet to test them against. Untested privileged code is the one thing this platform cannot afford to ship early, so Phase 2 begins by writing that execution path against a real VPS where each step can be proven.
+
+## Local deployment preflight
+
+`deploy --dry-run` resolves the selected root to an absolute path and inspects
+backend then frontend checkouts. Empty paths are new deployments. Existing
+checkouts must be ordinary Git repositories with the expected origin and branch,
+no tracked changes and no untracked files. Symlinked ancestors and Git directories
+are rejected. Worktrees and detached HEADs are not supported. Git metadata reads
+use `--no-optional-locks` and disable filesystem monitor hooks and untracked cache;
+no fetch, build or planned privileged command is executed.
+
+`PlannedCommand` stores program, argument vector, working directory and identity
+separately. Its shell-quoted display is for review; it is not an executor.
+Git and build actions have a project-user identity. Directory provisioning, unit
+installation and service control have a root identity. Account verification and
+fresh validated configuration staging remain explicit prerequisites, not implicit
+claims that the host is ready.
+
+An update plans `git fetch` followed by `git merge --ff-only FETCH_HEAD`. This
+preserves local history and fails on divergence; it does not reset or delete local
+commits. A locally ahead branch can remain ahead, so this is not an exact remote
+revision deployment. Both new and existing services plan `enable` then `restart`.
+All builds precede service installation, but builds still modify the checkout in
+place. Atomic releases, rollback, build sandboxing/resource limits, revision
+pinning, application health checks and host-wide port/domain allocation remain
+future execution work. Preflight is a point-in-time local check and must be
+repeated by a future executor before mutation.
+
+The branch validator accepts a conservative subset of Git ref names: letters,
+digits, hyphens, underscores, dots and slashes, with no leading option marker,
+empty/dot-prefixed components, `.lock` suffixes, trailing dots or `..` sequences.
+Root paths also use a restricted character set because renderers insert them
+into systemd/Caddy syntax. Neither restriction turns arbitrary builder commands
+into trusted code; they must never be executed as root.

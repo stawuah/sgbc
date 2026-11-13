@@ -180,8 +180,19 @@ impl Service {
             if branch.is_empty() || branch.len() > 100 {
                 bail!("`branch` must be between 1 and 100 characters");
             }
-            if branch.contains(|c: char| c.is_whitespace() || c == '\'' || c == ';') {
-                bail!("`branch` contains characters that are not valid in a git ref");
+            if branch.starts_with('-')
+                || branch.starts_with('/')
+                || branch.ends_with('/')
+                || branch.contains("..")
+                || branch.contains("//")
+                || branch.split('/').any(|part| {
+                    part.starts_with('.') || part.ends_with('.') || part.ends_with(".lock")
+                })
+                || !branch
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || "-_/.".contains(c))
+            {
+                bail!("`branch` must be a safe branch name using letters, digits, -, _, ., and /");
             }
         }
 

@@ -1,17 +1,48 @@
-//! The ordered steps a deploy performs.
-//!
-//! Phase 1 produces this plan and the files it refers to; it does not run the
-//! commands. Printing the exact sequence first is what makes the deploy
-//! reviewable before the platform is ever given a host to act on.
-
-use crate::config::{Project, Role};
+//! Reviewable deployment actions. Only the display form uses shell quoting;
+//! commands retain separate arguments and an explicit execution identity.
+use crate::config::Project;
 use crate::layout::Layout;
+use std::fmt;
+use std::path::PathBuf;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Identity {
+    Root,
+    Project(String),
+}
+
+#[derive(Debug, Clone)]
+pub struct PlannedCommand {
+    pub identity: Identity,
+    pub program: String,
+    pub args: Vec<String>,
+    pub cwd: Option<PathBuf>,
+}
+
+fn quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
+impl fmt::Display for PlannedCommand {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.identity {
+            Identity::Root => write!(f, "[root] ")?,
+            Identity::Project(user) => write!(f, "[user={user}] ")?,
+        }
+        if let Some(cwd) = &self.cwd {
+            write!(f, "cd {} && ", quote(&cwd.to_string_lossy()))?;
+        }
+        write!(f, "{}", quote(&self.program))?;
+        for arg in &self.args {
+            write!(f, " {}", quote(arg))?;
+        }
+        Ok(())
+    }
+}
 
 pub struct Step {
-    /// What this accomplishes, in a builder's terms.
     pub summary: String,
-    /// The command a Phase 2 deploy will run, when the step is a command.
-    pub command: Option<String>,
+    pub command: Option<PlannedCommand>,
 }
 
 impl Step {
@@ -21,120 +52,215 @@ impl Step {
             command: None,
         }
     }
-
-    fn run(summary: impl Into<String>, command: impl Into<String>) -> Self {
+    fn run(
+        summary: impl Into<String>,
+        identity: Identity,
+        cwd: Option<PathBuf>,
+        program: &str,
+        args: Vec<String>,
+    ) -> Self {
         Self {
             summary: summary.into(),
-            command: Some(command.into()),
+            command: Some(PlannedCommand {
+                identity,
+                program: program.into(),
+                args,
+                cwd,
+            }),
         }
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Checkout {
+    New,
+    Existing,
+}
+
+/// Offline template: assumes new checkouts. `deploy::inspect` supplies actual
+/// local checkout states for `deploy --dry-run`.
 pub fn build(project: &Project, layout: &Layout) -> Vec<Step> {
+    build_with_checkouts(
+        project,
+        layout,
+        &vec![Checkout::New; project.services().len()],
+    )
+}
+
+pub(crate) fn build_with_checkouts(
+    project: &Project,
+    layout: &Layout,
+    checkouts: &[Checkout],
+) -> Vec<Step> {
+    assert_eq!(checkouts.len(), project.services().len());
     let mut steps = Vec::new();
     let user = layout.service_user();
-
-    steps.push(Step::run(
-        format!("Create the {user} service account, with no login shell"),
-        format!(
-            "useradd --system --home {} --shell /usr/sbin/nologin {user}",
-            layout.project_dir().display()
-        ),
-    ));
-
-    // Shared directories stay root-owned. Only the project's own subtree is
-    // handed to its service account, so one builder cannot reach another's
-    // checkout, deploy records or logs.
+    let root = Identity::Root;
+    let builder = Identity::Project(user.clone());
+    steps.push(Step::note(format!("[root prerequisite] Ensure dedicated account/group {user} exists with home {} and no login shell; reject an unrelated existing account", layout.project_dir().display())));
     for dir in layout.platform_directories() {
         steps.push(Step::run(
-            format!("Ensure the platform directory {} exists", dir.display()),
-            format!("install -d -o root -g root -m 755 {}", dir.display()),
+            "Ensure platform-owned directory",
+            root.clone(),
+            None,
+            "install",
+            vec![
+                "-d".into(),
+                "-o".into(),
+                "root".into(),
+                "-g".into(),
+                "root".into(),
+                "-m".into(),
+                "755".into(),
+                dir.display().to_string(),
+            ],
         ));
     }
     for dir in layout.project_directories() {
         steps.push(Step::run(
-            format!("Ensure {} exists, owned by {user}", dir.display()),
-            format!("install -d -o {user} -g {user} -m 750 {}", dir.display()),
+            "Ensure project-owned directory",
+            root.clone(),
+            None,
+            "install",
+            vec![
+                "-d".into(),
+                "-o".into(),
+                user.clone(),
+                "-g".into(),
+                user.clone(),
+                "-m".into(),
+                "750".into(),
+                dir.display().to_string(),
+            ],
         ));
     }
-
-    for (role, service) in project.services() {
+    for ((role, service), checkout) in project.services().into_iter().zip(checkouts) {
         let dir = layout.service_dir(role);
-        steps.push(Step::run(
-            format!("Fetch the {role} repository at {}", service.branch_name()),
-            format!(
-                "git clone --depth 1 --branch {} {} {}",
-                service.branch_name(),
-                service.clone_url(),
-                dir.display()
-            ),
-        ));
-
+        match checkout {
+            Checkout::New => steps.push(Step::run(
+                format!("First deployment: clone {role}"),
+                builder.clone(),
+                None,
+                "git",
+                vec![
+                    "clone".into(),
+                    "--depth".into(),
+                    "1".into(),
+                    "--branch".into(),
+                    service.branch_name().into(),
+                    "--".into(),
+                    service.clone_url(),
+                    dir.display().to_string(),
+                ],
+            )),
+            Checkout::Existing => {
+                steps.push(Step::run(
+                    format!("Update: fetch {role} branch {}", service.branch_name()),
+                    builder.clone(),
+                    Some(dir.clone()),
+                    "git",
+                    vec![
+                        "fetch".into(),
+                        "--no-tags".into(),
+                        "origin".into(),
+                        format!("refs/heads/{}", service.branch_name()),
+                    ],
+                ));
+                steps.push(Step::run(
+                    format!("Update {role} only if fast-forward is possible; stop on divergence"),
+                    builder.clone(),
+                    Some(dir.clone()),
+                    "git",
+                    vec!["merge".into(), "--ff-only".into(), "FETCH_HEAD".into()],
+                ));
+            }
+        }
         if let Some(build) = &service.build {
             steps.push(Step::run(
-                format!("Build the {role}"),
-                format!("cd {} && {build}", dir.display()),
+                format!("Build {role} (include dependency installation in this command)"),
+                builder.clone(),
+                Some(dir),
+                "/bin/sh",
+                vec!["-c".into(), build.clone()],
             ));
-        } else {
-            steps.push(Step::note(format!(
-                "No build command for the {role}; its repository is deployed as fetched"
-            )));
         }
-
-        steps.push(Step::run(
-            format!("Install the {role} systemd unit"),
-            format!(
-                "install -o root -g root -m 644 {} /etc/systemd/system/{}",
-                layout.unit_path(role).display(),
-                layout.unit_name(role)
-            ),
-        ));
     }
-
-    steps.push(Step::run(
-        "Reload systemd so the new units are visible",
-        "systemctl daemon-reload",
-    ));
-
+    steps.push(Step::note("[root prerequisite] Render fresh units and Caddy fragment into platform-owned staging; validate units before installation. Do not install stale files."));
     for (role, _) in project.services() {
         steps.push(Step::run(
-            format!("Enable and start the {role}"),
-            format!("systemctl enable --now {}", layout.unit_name(role)),
+            format!("Install {role} unit"),
+            root.clone(),
+            None,
+            "install",
+            vec![
+                "-o".into(),
+                "root".into(),
+                "-g".into(),
+                "root".into(),
+                "-m".into(),
+                "644".into(),
+                layout.unit_path(role).display().to_string(),
+                format!("/etc/systemd/system/{}", layout.unit_name(role)),
+            ],
         ));
     }
-
-    let routed: Vec<Role> = project
+    steps.push(Step::run(
+        "Reload systemd",
+        root.clone(),
+        None,
+        "systemctl",
+        vec!["daemon-reload".into()],
+    ));
+    for (role, _) in project.services() {
+        steps.push(Step::run(
+            format!("Enable {role}"),
+            root.clone(),
+            None,
+            "systemctl",
+            vec!["enable".into(), layout.unit_name(role)],
+        ));
+        steps.push(Step::run(
+            format!("Start or restart {role} with the updated code"),
+            root.clone(),
+            None,
+            "systemctl",
+            vec!["restart".into(), layout.unit_name(role)],
+        ));
+    }
+    if project
         .services()
-        .into_iter()
-        .filter(|(role, service)| project.domain_for(*role).is_some() && service.port.is_some())
-        .map(|(role, _)| role)
-        .collect();
-
-    if routed.is_empty() {
+        .iter()
+        .any(|(role, _)| project.domain_for(*role).is_some())
+    {
+        steps.push(Step::note("[root prerequisite] Configure Caddy site imports, DNS, and Caddy access to access-log directories; stage and validate the complete candidate Caddy configuration before replacing the active fragment"));
+        steps.push(Step::run(
+            "Install validated Caddy fragment",
+            root.clone(),
+            None,
+            "install",
+            vec![
+                "-o".into(),
+                "root".into(),
+                "-g".into(),
+                "root".into(),
+                "-m".into(),
+                "644".into(),
+                layout.caddy_fragment().display().to_string(),
+                format!("/etc/caddy/sites/{}.caddy", project.name),
+            ],
+        ));
+        steps.push(Step::run(
+            "Reload Caddy",
+            root,
+            None,
+            "systemctl",
+            vec!["reload".into(), "caddy".into()],
+        ));
+    } else {
         steps.push(Step::note(
             "No domain is configured, so Caddy is left untouched",
         ));
-    } else {
-        steps.push(Step::run(
-            "Install the Caddy site configuration",
-            format!(
-                "install -o root -g root -m 644 {} /etc/caddy/sites/{}.caddy",
-                layout.caddy_fragment().display(),
-                project.name
-            ),
-        ));
-        steps.push(Step::run(
-            "Reload Caddy, which provisions HTTPS for each new name",
-            "systemctl reload caddy",
-        ));
-        for role in routed {
-            if let Some(domain) = project.domain_for(role) {
-                steps.push(Step::note(format!(
-                    "Point a DNS record for {domain} at this host, then it serves the {role}"
-                )));
-            }
-        }
     }
-
+    steps.push(Step::note("Execution is not implemented. Stop on any failure. In-place updates are not atomic and have no rollback or application health check."));
     steps
 }

@@ -9,7 +9,7 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use sgbc::config::Project;
 use sgbc::layout::{DEFAULT_ROOT, Layout};
-use sgbc::{plan, render};
+use sgbc::{deploy, plan, render};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -41,6 +41,15 @@ enum Command {
     /// Print the ordered steps a deploy would perform.
     Plan {
         config: PathBuf,
+        #[arg(long, default_value = DEFAULT_ROOT)]
+        root: PathBuf,
+    },
+    /// Inspect local checkouts and preview deployment. Execution is unavailable.
+    Deploy {
+        config: PathBuf,
+        /// Required: this release only supports previewing deployment.
+        #[arg(long, required = true)]
+        dry_run: bool,
         #[arg(long, default_value = DEFAULT_ROOT)]
         root: PathBuf,
     },
@@ -83,6 +92,7 @@ fn main() -> Result<()> {
 
         Command::Render { config, root } => {
             let project = load(&config)?;
+            let root = deploy::absolute_root(&root)?;
             let layout = Layout::new(&root, &project.name);
 
             for (role, service) in project.services() {
@@ -96,6 +106,7 @@ fn main() -> Result<()> {
 
         Command::Plan { config, root } => {
             let project = load(&config)?;
+            let root = deploy::absolute_root(&root)?;
             let layout = Layout::new(&root, &project.name);
             let steps = plan::build(&project, &layout);
 
@@ -109,8 +120,33 @@ fn main() -> Result<()> {
             println!("\nPhase 1 does not run these steps.");
         }
 
+        Command::Deploy {
+            config,
+            root,
+            dry_run: _,
+        } => {
+            let project = load(&config)?;
+            let root = deploy::absolute_root(&root)?;
+            let layout = Layout::new(&root, &project.name);
+            let steps = deploy::inspect(&project, &layout)?;
+            println!(
+                "Deployment dry run for {} (local checkout inspection only)\n",
+                project.name
+            );
+            for (index, step) in steps.iter().enumerate() {
+                println!("{:>3}. {}", index + 1, step.summary);
+                if let Some(command) = &step.command {
+                    println!("     {command}");
+                }
+            }
+            println!(
+                "\nNo deployment actions executed or files written. Host accounts, ownership, runtimes, ports, DNS and HTTPS are not verified."
+            );
+        }
+
         Command::Write { config, root } => {
             let project = load(&config)?;
+            let root = deploy::absolute_root(&root)?;
             let layout = Layout::new(&root, &project.name);
 
             for dir in layout.directories() {
