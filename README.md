@@ -203,6 +203,34 @@ They do not establish host permissions, service startup or HTTPS behavior.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the configuration reference and the generated output, and [CONTRIBUTING.md](CONTRIBUTING.md) to work on it.
 
+## Runtime configuration
+
+See `examples/environment.yaml` for per-service public `env` settings and an
+`env_file` reference. For example:
+
+```yaml
+backend:
+  repo: github.com/user/backend
+  port: 8080
+  env:
+    LOG_LEVEL: info
+  env_file: backend.env
+```
+
+Provision the referenced file separately at
+`<root>/secrets/<project-name>/backend.env` with mode 600. On a host, the operator
+must own it as root and protect its parent directories. Use `KEY=value` entries;
+keep secrets out of YAML. Secret-file values override inline environment settings,
+so do not override PORT with a value that disagrees with the configured service.
+These settings apply at runtime, not during builds.
+
+`render` and `write` include public values and the file path, never file contents.
+`deploy --dry-run` checks the file's existence, type and Unix permissions without
+reading it. Offline generation does not require the file. No command provisions,
+copies, encrypts or validates secret-file contents. The repository ignores `.env`,
+`.env.*`, `*.env` and `/secrets/` as an accidental-commit guard; this does not remove
+already tracked files or protect secret values placed in other files.
+
 ## Security model
 
 The VPS is shared infrastructure.

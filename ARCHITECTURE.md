@@ -33,6 +33,9 @@ backend:                       # optional
   build: cargo build --release
   start: ./target/release/api
   port: 8080
+  env:                         # optional public runtime strings
+    LOG_LEVEL: info
+  env_file: backend.env        # optional filename under <root>/secrets/<name>/
 
 domain:                        # optional
   frontend: myproject.solanaghana.dev
@@ -144,3 +147,38 @@ empty/dot-prefixed components, `.lock` suffixes, trailing dots or `..` sequences
 Root paths also use a restricted character set because renderers insert them
 into systemd/Caddy syntax. Neither restriction turns arbitrary builder commands
 into trusted code; they must never be executed as root.
+
+## Runtime environment configuration
+
+Each service accepts an optional `env` map and `env_file` filename. Both are
+runtime-only: build commands do not receive them. Existing configurations retain
+their generated output. `env` keys use `[A-Za-z_][A-Za-z0-9_]*`; values must not
+contain control characters. Quote YAML values to make their intended string form
+clear. `PORT` is reserved in `env`; use the service's `port` field instead.
+
+Public values are rendered deterministically into quoted `Environment=` entries.
+Backslashes and double quotes are escaped, and literal percent signs are doubled
+to prevent systemd specifier expansion. Dollar signs remain literal. Explicit
+`env.NODE_ENV` overrides the default `production`. Public values appear in rendered
+and written units, but plans omit their values. Never place secrets in `env`.
+
+`env_file: backend.env` references `<root>/secrets/<project>/backend.env` through a
+required `EnvironmentFile=` directive. Only a filename is accepted (letters,
+digits, dots, hyphens and underscores, no leading dot); arbitrary paths, globs,
+specifiers and traversal are rejected. `write` does not create secret directories
+or copy secret files. The operator provisions them separately, outside checkouts,
+with root ownership, protected parent directories and file mode 600.
+
+`validate`, `render`, `plan` and `write` need no local secret file. `deploy --dry-run`
+requires an existing regular file, rejects symlinked paths and, on Unix, requires
+owner-read permission with no group/other permissions. It inspects metadata only;
+contents, syntax, ownership and parent-directory access policy are not validated.
+The system service manager reads the file when starting the app. File values take
+precedence over inline settings, including PORT, so operators must keep PORT
+consistent with routing. Use systemd environment-file syntax (`KEY=value`, no
+`export`); this is not a shell script and no shell substitutions are performed.
+
+This keeps values out of generated unit files and sgbc output; it is not an
+encrypted secret store. The application receives an ordinary process environment.
+See [systemd.exec](https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html#Environment=)
+for the environment and environment-file semantics.

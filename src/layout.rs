@@ -39,6 +39,12 @@ impl Layout {
         self.root.join("deployments").join(&self.project)
     }
 
+    /// Operator-provisioned runtime secrets, outside project checkouts.
+    /// `filename` must come from a validated Service::env_file.
+    pub fn env_file(&self, filename: &str) -> PathBuf {
+        self.root.join("secrets").join(&self.project).join(filename)
+    }
+
     /// `<root>/configs` — generated Caddy fragments, imported by the Caddyfile.
     pub fn configs_dir(&self) -> PathBuf {
         self.root.join("configs")

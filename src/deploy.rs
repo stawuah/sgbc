@@ -76,6 +76,29 @@ fn git(dir: &Path, args: &[&str]) -> Result<String> {
 pub fn inspect(project: &Project, layout: &Layout) -> Result<Vec<Step>> {
     let mut checkouts = Vec::new();
     for (role, service) in project.services() {
+        if let Some(file) = &service.env_file {
+            let path = layout.env_file(file);
+            reject_symlinks(&path)?;
+            let metadata = fs::metadata(&path).with_context(|| {
+                format!(
+                    "{role}: required env_file {} is missing or inaccessible",
+                    path.display()
+                )
+            })?;
+            if !metadata.is_file() {
+                bail!("{role}: env_file must be a regular file");
+            }
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mode = metadata.permissions().mode();
+                if mode & 0o077 != 0 || mode & 0o400 == 0 {
+                    bail!(
+                        "{role}: env_file must be owner-readable with no group/other permissions (use chmod 600)"
+                    );
+                }
+            }
+        }
         let dir = layout.service_dir(role);
         reject_symlinks(&dir)?;
         let state = if !dir.try_exists()? {

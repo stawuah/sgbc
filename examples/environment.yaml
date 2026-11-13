@@ -1,0 +1,12 @@
+# Public runtime settings belong in YAML. Provision the secret file separately.
+name: configured-api
+backend:
+  repo: github.com/user/backend
+  build: npm ci && npm run build
+  port: 8080
+  env:
+    NODE_ENV: production
+    LOG_LEVEL: info
+    WELCOME_MESSAGE: 'Hello, Ghana! 100% ready.'
+  # Resolved beneath <root>/secrets/configured-api/; never committed here.
+  env_file: backend.env

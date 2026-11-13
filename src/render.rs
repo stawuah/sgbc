@@ -46,6 +46,21 @@ pub fn systemd_unit(project: &Project, service: &Service, role: Role, layout: &L
         unit.push_str(&format!("Environment=PORT={port}\n"));
     }
 
+    for (key, value) in &service.env {
+        // systemd unquotes C-style strings and expands % specifiers, not $.
+        let escaped = value
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"")
+            .replace('%', "%%");
+        unit.push_str(&format!("Environment=\"{key}={escaped}\"\n"));
+    }
+    if let Some(file) = &service.env_file {
+        unit.push_str(&format!(
+            "EnvironmentFile={}\n",
+            layout.env_file(file).display()
+        ));
+    }
+
     unit.push_str(&format!(
         "\n\
          StandardOutput=append:{log}\n\

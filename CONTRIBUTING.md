@@ -106,3 +106,11 @@ production deployment execution is still unavailable.
 When editing the plan, inspect `tests/golden/*.plan` after regenerating snapshots.
 Keep execution identities explicit and Git arguments separate from shell command
 strings. Only a builder's explicit build command should require a shell.
+
+## Runtime environment checks
+
+`cargo test --test env` checks environment validation, escaping, secret-file
+metadata checks and CLI output without reading secret values. On a machine with
+systemd tooling, also run `cargo test --test env -- --ignored` to verify generated
+units using `systemd-analyze verify`; this check treats warnings as failures.
+Use only dummy values in tests. Real environment files must remain outside Git.

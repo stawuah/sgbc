@@ -135,6 +135,15 @@ pub(crate) fn build_with_checkouts(
         ));
     }
     for ((role, service), checkout) in project.services().into_iter().zip(checkouts) {
+        if !service.env.is_empty() {
+            steps.push(Step::note(format!(
+                "{role}: configure {} public runtime environment variables (values omitted)",
+                service.env.len()
+            )));
+        }
+        if let Some(file) = &service.env_file {
+            steps.push(Step::note(format!("[root prerequisite] Provision {} for {role} runtime with root ownership and mode 600 in a protected directory; never copy it into the checkout. Contents are not read or validated by sgbc.", layout.env_file(file).display())));
+        }
         let dir = layout.service_dir(role);
         match checkout {
             Checkout::New => steps.push(Step::run(

@@ -7,7 +7,7 @@
 
 use anyhow::{Result, bail};
 use serde::Deserialize;
-use std::fmt;
+use std::{collections::BTreeMap, fmt};
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -33,6 +33,12 @@ pub struct Service {
     pub start: Option<String>,
     #[serde(default)]
     pub port: Option<u16>,
+    /// Public runtime configuration. Use env_file for secrets.
+    #[serde(default)]
+    pub env: BTreeMap<String, String>,
+    /// Filename beneath <root>/secrets/<project>/, never a checkout path.
+    #[serde(default)]
+    pub env_file: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -175,6 +181,34 @@ impl Service {
 
     fn validate(&self) -> Result<()> {
         validate_repo(&self.repo)?;
+        for (key, value) in &self.env {
+            let mut chars = key.chars();
+            if !chars
+                .next()
+                .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+                || !chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+            {
+                bail!("env keys must match [A-Za-z_][A-Za-z0-9_]*");
+            }
+            if key == "PORT" {
+                bail!("env.PORT is reserved; configure `port` instead");
+            }
+            if value.chars().any(char::is_control) {
+                bail!("env.{key} must not contain control characters");
+            }
+        }
+        if let Some(file) = &self.env_file
+            && (file.is_empty()
+                || file.len() > 128
+                || file.starts_with('.')
+                || !file
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c)))
+        {
+            bail!(
+                "env_file must be a filename using letters, digits, -, _, and .; paths and leading dots are not allowed"
+            );
+        }
 
         if let Some(branch) = &self.branch {
             if branch.is_empty() || branch.len() > 100 {
