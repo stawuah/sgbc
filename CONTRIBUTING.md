@@ -114,3 +114,30 @@ metadata checks and CLI output without reading secret values. On a machine with
 systemd tooling, also run `cargo test --test env -- --ignored` to verify generated
 units using `systemd-analyze verify`; this check treats warnings as failures.
 Use only dummy values in tests. Real environment files must remain outside Git.
+
+## Continuous integration
+
+The `CI` workflow runs on pushes, pull requests and manual dispatches using
+Ubuntu 24.04 and Rust 1.95.0. Its `Rust and CLI checks` job runs formatting,
+Clippy with warnings denied, all portable tests, the explicit systemd environment
+verification test, a release build and `scripts/ci-smoke.py`.
+
+To reproduce the checks with that toolchain installed:
+
+```bash
+cargo +1.95.0 fmt --all -- --check
+cargo +1.95.0 clippy --locked --all-targets -- -D warnings
+cargo +1.95.0 test --locked
+cargo +1.95.0 test --locked --test env -- --ignored
+cargo +1.95.0 build --release --locked
+python3 scripts/ci-smoke.py
+```
+
+The smoke test requires Python 3 and `systemd-analyze`. It exercises every YAML
+example with the release binary in temporary directories, checks that dry runs
+leave paths, file contents and permissions unchanged, checks missing secret-file
+failure, and verifies generated units with warnings treated as failures. It uses
+only a dummy secret and never starts services, fetches application repositories,
+or provisions accounts. A green run verifies local tooling; it does not prove
+live hosting, Caddy configuration, DNS or HTTPS. The workflow publishes no release
+and does not configure branch-protection rules.
